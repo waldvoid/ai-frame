@@ -1,3 +1,4 @@
+
 import datetime
 import io
 import openai
@@ -26,11 +27,8 @@ from pvrecorder import PvRecorder
 from threading import Thread, Event
 from time import sleep
 from lib import epd5in65f
-
-picdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pic')
-libdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'lib')
-if os.path.exists(libdir):
-    sys.path.append(libdir)
+from dotenv import load_dotenv
+libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib')
 
 audio_stream = None
 cobra = None
@@ -38,22 +36,20 @@ pa = None
 porcupine = None
 recorder = None
 wav_file = None
-
+load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 
 epd = epd5in65f.EPD()
 logging.info("init and Clear")
-epd.init()
 epd.Clear()
-fontBold = ImageFont.truetype(os.path.join(picdir, 'Font.ttc'), 24)
-fontMed = ImageFont.truetype(os.path.join(picdir, 'Font.ttc'), 18)
-fontBlack = ImageFont.truetype(os.path.join(picdir, 'Font.ttc'), 40)
+fontBold = ImageFont.truetype(os.path.join(libdir, 'Roboto-Bold.ttc'), 24)
+fontMed = ImageFont.truetype(os.path.join(libdir, 'Roboto-Medium.ttc'), 18)
+fontBlack = ImageFont.truetype(os.path.join(libdir, 'Roboto-Black.ttc'), 40)
 
 openai.api_key = "youropenaikey"
-
 pv_access_key= "yourpicokey"
 
-
+''''''
 client = OpenAI(api_key=openai.api_key)
 
 Clear_list = ["Clear",
@@ -68,7 +64,7 @@ Clear_list = ["Clear",
     "Wipe",
     "Wipe the screen",
     "Wipe the epd",
-    "Wipe the canvas",
+    "Wipe the canvas", 
     "Erase",
     "Erase the screen",
     "Erase the epd",
@@ -78,7 +74,7 @@ Clear_list = ["Clear",
 
 # Uncomment the following if you want to speicfy the style(s) that will be used
 # without including it in the specific request.  You can use or modify this list.
-
+"""
 style = [
     "Leonardo da Vinci",
     "Pablo Picasso",
@@ -103,7 +99,7 @@ style = [
     "Surrealism",
     "Impressionism",
     "Cubism",
-   "Steampunk",
+    "Steampunk",
     "oil painting",
     "watercolor",
     "Naturalism",
@@ -111,7 +107,7 @@ style = [
     "Flat Art",
     "3D Illustration"
     ]
-
+"""
 
 def clean_screen():
     logging.info("1.Clearing...")
@@ -119,7 +115,6 @@ def clean_screen():
     logging.info("Cleaning complete")
 
 def render_time():
-    logging.info("render time started")
     Himage = Image.new('RGB', (epd.width, epd.height), 0xffffff)  # 255: clear the frame
     draw = ImageDraw.Draw(Himage)
     time_now = datetime.datetime.now()
@@ -138,35 +133,32 @@ def render_time():
     draw.arc((140, 50, 190, 100), 0, 360, fill = 0)
     draw.rectangle((80, 50, 130, 100), fill = 0)
     draw.chord((200, 50, 250, 100), 0, 360, fill = 0)
-    epd.display(epd.getbuffer(Himage))
+    epd.epd(epd.getbuffer(Himage))
     time.sleep(1)
-    print("The current date and time is:", formatted_time)
+    print("The current date and time is:", formatted_time)  
 
 def current_time():
-    logging.info("current time started")
 
     time_now = datetime.datetime.now()
     formatted_time = time_now.strftime("%m-%d-%Y %I:%M %p\n")
-    print("The current date and time is:", formatted_time)
+    print("The current date and time is:", formatted_time)  
 
 
 def dall_e3(prompt):
-    logging.info("dall-e connection method started")
     try:
         response = client.images.generate(
-            model="dall-e-2",
+            model="dall-e-3",
             prompt=prompt,
             size="1024x1024",
             quality="standard",
             n=1,
         )
-        return (response.data[0].url)
+        return (response.data[0].url) 
     except ConnectionResetError:
-        logging.info("ConnectionResetError")
+        print("ConnectionResetError")
         current_time()
 
 def detect_silence():
-    logging.info("detect silence initialized")
 
     cobra = pvcobra.create(access_key=pv_access_key)
     silence_pa = pyaudio.PyAudio()
@@ -179,22 +171,49 @@ def detect_silence():
     last_voice_time = time.time()
     while True:
         cobra_pcm = cobra_audio_stream.read(cobra.frame_length)
-        cobra_pcm = struct.unpack_from("h" * cobra.frame_length, cobra_pcm)
+        cobra_pcm = struct.unpack_from("h" * cobra.frame_length, cobra_pcm)      
         if cobra.process(cobra_pcm) > 0.2:
             last_voice_time = time.time()
         else:
             silence_duration = time.time() - last_voice_time
             if silence_duration > 1.3:
-                logging.info("End of request detected\n")
-                cobra_audio_stream.stop_stream
+                print("End of request detected\n")
+                Himage = Image.new('RGB', (epd.width, epd.height), 0xffffff)  # 255: clear the frame
+                draw = ImageDraw.Draw(Himage)
+                draw.text((10, 160), "Couldn't hear you :(", font = fontBlack, fill = epd.BLACK)
+                draw.line((20, 50, 70, 100), fill = 0)
+                draw.line((70, 50, 20, 100), fill = 0)
+                draw.rectangle((20, 50, 70, 100), outline = 0)
+                draw.line((165, 50, 165, 100), fill = 0)
+                draw.line((140, 75, 190, 75), fill = 0)
+                draw.arc((140, 50, 190, 100), 0, 360, fill = 0)
+                draw.rectangle((80, 50, 130, 100), fill = 0)
+                draw.chord((200, 50, 250, 100), 0, 360, fill = 0)
+                epd.epd(epd.getbuffer(Himage))
+                cobra_audio_stream.stop_stream                
                 cobra_audio_stream.close()
                 cobra.delete()
                 last_voice_time=None
                 break
 
+def fade_leds(event):
 
+    Himage = Image.new('RGB', (epd.width, epd.height), 0xffffff)  # 255: clear the frame
+    draw = ImageDraw.Draw(Himage)
+    draw.text((10, 160), "I'm Listening...", font = fontBlack, fill = epd.BLACK)
+    draw.line((20, 50, 70, 100), fill = 0)
+    draw.line((70, 50, 20, 100), fill = 0)
+    draw.rectangle((20, 50, 70, 100), outline = 0)
+    draw.line((165, 50, 165, 100), fill = 0)
+    draw.line((140, 75, 190, 75), fill = 0)
+    draw.arc((140, 50, 190, 100), 0, 360, fill = 0)
+    draw.rectangle((80, 50, 130, 100), fill = 0)
+    draw.chord((200, 50, 250, 100), 0, 360, fill = 0)
+    epd.epd(epd.getbuffer(Himage))
+    time.sleep(.3)
+        
 def listen():
-    logging.info("listen initialized")
+
     cobra = pvcobra.create(access_key=pv_access_key)
     listen_pa = pyaudio.PyAudio()
     listen_audio_stream = listen_pa.open(
@@ -203,12 +222,12 @@ def listen():
                 format=pyaudio.paInt16,
                 input=True,
                 frames_per_buffer=cobra.frame_length)
-    logging.info("Listening...")
+    print("Listening...")
     while True:
         listen_pcm = listen_audio_stream.read(cobra.frame_length)
         listen_pcm = struct.unpack_from("h" * cobra.frame_length, listen_pcm)
-        if cobra.process(listen_pcm) > 0.4:
-            logging.info("Voice detected")
+        if cobra.process(listen_pcm) > 0.3:
+            print("Voice detected")
             listen_audio_stream.stop_stream
             listen_audio_stream.close()
             cobra.delete()
@@ -216,34 +235,36 @@ def listen():
 
 def refresh():
 
-    logging.info("\nThe screen refreshes every day at midnight to help prevent burn-in\n")
+    print("\nThe screen refreshes every day at midnight to help prevent burn-in\n")
     current_time()
     clean_screen()
-    logging.info("\nRe-rendering")
-    Himage = Image.open(img_resized)
-    epd.display(epd.getbuffer(Himage))
-    logging.info("\nDone")
-
+    sleep(5)
+    print("\nRe-rendering")
+    epd.set_image(img_resized)
+#    epd.set_border(epd.BLACK)
+    epd.show()
+    print("\nDone")
+    
 def refresh_schedule(event2):
-    logging.info("refresh schedule initilizaed")
 
     schedule.every().day.at("00:00").do(refresh)
     event2.clear()
-    while not event2.is_set():
+    while not event2.is_set():                     
         schedule.run_pending()
         sleep(1)
-
+        
 def wake_word():
-    logging.info("wake word initialized")
 
-    porcupine = pvporcupine.create(keywords=["computer", "jarvis", "alexa"],
-                            access_key=pv_access_key,
-                            sensitivities=[0.05, 0.05, 0.05], #from 0 to 1.0 - a higher number reduces the miss rate at the cost on increased false alarms
+    porcupine = pvporcupine.create(keywords=["computer", "jarvis", "Art-Frame"],
+                            access_key=pv_access_key,                                   
+                            sensitivities=[0.1, 0.1, 0.1], #from 0 to 1.0 - a higher number reduces the miss rate at the cost on increased false alarms
                                    )
-    logging.info("porcupine initialized")
-    logging.info("devnulls completed")
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    old_stderr = os.dup(2)
+    sys.stderr.flush()
+    os.dup2(devnull, 2)
+    os.close(devnull) 
     wake_pa = pyaudio.PyAudio()
-    logging.info("pyAudio initialized")
     porcupine_audio_stream = wake_pa.open(
                     rate=porcupine.sample_rate,
                     channels=1,
@@ -251,20 +272,14 @@ def wake_word():
                     input=True,
                     frames_per_buffer=porcupine.frame_length)
     Detect = True
-    logging.info("porcupine audio stream initialized")
     while Detect:
-        logging.info("ses detected")
         porcupine_pcm = porcupine_audio_stream.read(porcupine.frame_length)
         porcupine_pcm = struct.unpack_from("h" * porcupine.frame_length, porcupine_pcm)
         porcupine_keyword_index = porcupine.process(porcupine_pcm)
         if porcupine_keyword_index >= 0:
-            logging.info("ses 0'dan büyük çiziliyor")
             Himage = Image.new('RGB', (epd.width, epd.height), 0xffffff)  # 255: clear the frame
             draw = ImageDraw.Draw(Himage)
-            logging.info("himage oluşturuldu")
-            draw.text((epd.width/2-100, 200), "Hey!", font = fontBlack, fill = epd.BLACK)
-            draw.text((epd.width/2-100, 240), "What do you want to", font = fontBlack, fill = epd.BLACK)
-            draw.text((epd.width/2-100, 280), "DRAW", font = fontBlack, fill = epd.YELLOW)
+            draw.text((10, 160), "Heard you!", font = fontBlack, fill = epd.BLACK)
             draw.line((20, 50, 70, 100), fill = 0)
             draw.line((70, 50, 20, 100), fill = 0)
             draw.rectangle((20, 50, 70, 100), outline = 0)
@@ -273,13 +288,15 @@ def wake_word():
             draw.arc((140, 50, 190, 100), 0, 360, fill = 0)
             draw.rectangle((80, 50, 130, 100), fill = 0)
             draw.chord((200, 50, 250, 100), 0, 360, fill = 0)
-            epd.display(epd.getbuffer(Himage))
-            logging.info("Wake word detected\n")
+            epd.epd(epd.getbuffer(Himage))
+            print(Fore.GREEN + "\nWake word detected\n")
             current_time()
-            logging.info("What would you like me to render?\n")
+            print("What would you like me to render?\n")
             porcupine_audio_stream.stop_stream
             porcupine_audio_stream.close()
-            porcupine.delete()
+            porcupine.delete()         
+            os.dup2(old_stderr, 2)
+            os.close(old_stderr)
             Detect = False
 
 class Recorder(Thread):
@@ -304,6 +321,7 @@ class Recorder(Thread):
         recorder.stop()
 
         self._is_recording = False
+
     def stop(self):
         self._stop = True
         while self._is_recording:
@@ -312,16 +330,16 @@ class Recorder(Thread):
         return self._pcm
 
 try:
-    logging.info("trying to create openai connection")
+
     o = create(
         access_key=pv_access_key,
         enable_automatic_punctuation = False,
         )
-
+    
+    event = threading.Event()
     event2 = threading.Event()
-
+    
     while True:
-        logging.info("Model true, connection established")
 
         wake_word()
         event2.set()
@@ -330,23 +348,25 @@ try:
         listen()
         detect_silence()
         transcript, words = o.process(recorder.stop())
+        t_fade = threading.Thread(target=fade_leds, args=(event,))
+        t_fade.start()
         recorder.stop()
         if transcript not in Clear_list:
             current_time()
             prompt_full = (transcript + (" using vibrant colors"))
 # this program asks that only bright colors be used because they look more vibrant on e-paper
 # if you prefer not to do this, comment out the prompt_full line above and uncomment the floowing line
-#            prompt_full = transcript
+#            prompt_full = transcript            
 # comment out the prior line and uncomment one of the following lines to try pretermined styles
 #            prompt_full = (transcript + (", using only shades of the colors blue, green, red, white, yellow, orange and black."))
 #            Style = random.choice(style)
-#            prompt_full = (transcript + (" in the style of ") + Style + (", using only shades of the colors blue, green, red, white, yellow, orange and black."))>
-            logging.info("You requested: " + prompt_full)
-            logging.info("\nCreating...")
+#            prompt_full = (transcript + (" in the style of ") + Style + (", using only shades of the colors blue, green, red, white, yellow, orange and black."))   
+            print("You requested: " + prompt_full)
+            print("\nCreating...")   
             image_url = dall_e3(prompt_full)
             raw_data = urllib.request.urlopen(image_url).read()
             img = Image.open(io.BytesIO(raw_data))
-            img_bordered = ImageOps.expand(img, border=(152,0), fill='black')
+            img_bordered = ImageOps.expand(img, border=(152,0), fill='black')    
             img_resized = img_bordered.resize((600, 448), Image.ANTIALIAS)
 
 #     curr_col = ImageEnhance.Color(img_resized)
@@ -354,25 +374,28 @@ try:
 #     img_enhanced = curr_col.enhance(new_col)
 #     img_bordered = ImageOps.expand(img_enhanced, border=(0,76), fill='black')
 
-            logging.info("\nRendering...")
-            epd.display(epd.getbuffer(img_resized))
-
+            print("\nRendering...")
+            epd.set_image(img_resized)
+#            epd.set_border(epd.BLACK)
+            epd.show()
 # uncomment the following line if you also want the image to show on a epd connected to the RPi
 #            img.show()
+            event.set()
+            sleep(2)            
             t_refresh = threading.Thread(target=refresh_schedule, args=(event2,))
-            t_refresh.start()
-            logging.info("\nDone")
-
+            t_refresh.start()                      
+            print("\nDone")
+   
         else:
-            logging.info("Clearing the epd...")
-            clean_screen()
+            print ("Clearing the epd...")
+            clean_screen()            
+            event.set()
             event2.set()
             print("\nDone")
-
+   
 except ConnectionResetError:
-    logging.info("Reset Error")
+    print ("Reset Error")
     current_time()
-
-except KeyboardInterrupt:
-    logging.info("Keyboard Interrupt")
+    
+except KeyboardInterrupt:    
     exit()
